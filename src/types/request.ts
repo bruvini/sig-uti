@@ -40,6 +40,10 @@ const BaseRequestSchema = z.object({
   exitReason: z.enum(["death", "transfer", "discharge", "error", "bed_assigned"]).optional(),
   exitNote: z.string().optional(),
 
+  // SISREG Integration
+  sisregId: z.string().optional(),
+  clinicalDetails: z.string().optional(),
+
   auditHistory: z.array(z.custom<AuditEntry>()).optional(),
 });
 

@@ -2,13 +2,15 @@ import React, { useEffect, useState } from 'react';
 import NewRequestModal from "@/components/NewRequestModal";
 import RefusalModal from "@/components/RefusalModal";
 import EvaluationModal from "@/components/EvaluationModal";
+import EditDetailsModal from "@/components/EditDetailsModal";
 import { subscribeToPendingRequests, subscribeToWaitingRequests } from "@/services/requestService";
 import { RequestData } from "@/types/request";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
-import { Clock, Activity, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Clock, Activity, AlertCircle, CheckCircle2, XCircle, ClipboardCheck, Edit2 } from "lucide-react";
 
 const Dashboard = () => {
   const [pendingRequests, setPendingRequests] = useState<(RequestData & { id: string })[]>([]);
@@ -17,6 +19,8 @@ const Dashboard = () => {
   // Modal States
   const [refusalModalOpen, setRefusalModalOpen] = useState(false);
   const [evaluationModalOpen, setEvaluationModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+
   const [selectedRequest, setSelectedRequest] = useState<(RequestData & { id: string }) | null>(null);
   const [isReview, setIsReview] = useState(false);
 
@@ -48,7 +52,12 @@ const Dashboard = () => {
     setSelectedRequest(req);
     setIsReview(true);
     setEvaluationModalOpen(true);
-};
+  };
+
+  const handleEdit = (req: RequestData & { id: string }) => {
+    setSelectedRequest(req);
+    setEditModalOpen(true);
+  };
 
   const getRequestTypeLabel = (type: string) => {
       switch(type) {
@@ -110,7 +119,7 @@ const Dashboard = () => {
           {/* Left Column: Queues */}
           <div className="flex flex-col gap-6">
 
-            {/* Pending Requests Block */}
+            {/* Pending Requests Block (Refactored Grid) */}
             <div className="bg-white rounded-lg shadow-sm border border-l-4 border-l-yellow-500 border-gray-200 flex flex-col max-h-[500px]">
                 <div className="p-4 border-b bg-yellow-50/30 flex justify-between items-center">
                     <h2 className="font-semibold text-lg text-gray-800 flex items-center gap-2">
@@ -129,51 +138,63 @@ const Dashboard = () => {
                             <p className="text-sm">Nenhuma pendência no momento</p>
                         </div>
                     ) : (
-                        <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {pendingRequests.map((req) => (
-                                <div key={req.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div>
-                                            <h3 className="font-bold text-gray-900">{req.patientName}</h3>
-                                            <p className="text-sm text-gray-500">CNS: {req.cns}</p>
+                                <div key={req.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-5">
+                                                {getRequestTypeLabel(req.requestType)}
+                                            </Badge>
                                         </div>
-                                        <Badge variant="outline" className="capitalize">
-                                            {getRequestTypeLabel(req.requestType)}
-                                        </Badge>
+                                        <h3 className="font-bold text-gray-900 text-sm truncate" title={req.patientName}>{req.patientName}</h3>
+                                        <p className="text-xs text-gray-500 mb-2">CNS: {req.cns}</p>
+
+                                        <div className="mb-3">
+                                            {req.requestType === 'surgical' ? (
+                                                <p className="text-xs text-gray-600 truncate" title={req.surgeryType}>
+                                                   {req.surgeryType}
+                                                </p>
+                                            ) : (
+                                                <p className="text-xs text-gray-600 line-clamp-2" title={req.clinicalReason}>
+                                                   {req.clinicalReason}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
 
-                                    <div className="mb-4">
-                                        {req.requestType === 'surgical' ? (
-                                             <p className="text-sm text-gray-600">
-                                                <span className="font-medium">Procedimento:</span> {req.surgeryType}
-                                             </p>
-                                        ) : (
-                                            <p className="text-sm text-gray-600 line-clamp-2">
-                                                <span className="font-medium">Motivo:</span> {req.clinicalReason}
-                                            </p>
-                                        )}
-                                         <p className="text-xs text-gray-400 mt-1">
-                                            Solicitado em: {req.requestDate ? `${req.requestDate} ${req.requestTime || ''}` : 'Data Sistema'}
-                                         </p>
-                                    </div>
+                                    <div className="flex gap-2 justify-end pt-2 border-t">
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                    onClick={() => handleRefuse(req)}
+                                                >
+                                                    <XCircle className="h-5 w-5" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Recusar Solicitação</p>
+                                            </TooltipContent>
+                                        </Tooltip>
 
-                                    <div className="flex gap-2 pt-2 border-t">
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            className="flex-1"
-                                            onClick={() => handleRefuse(req)}
-                                        >
-                                            Recusar
-                                        </Button>
-                                        <Button
-                                            variant="default"
-                                            size="sm"
-                                            className="flex-1 bg-blue-600 hover:bg-blue-700"
-                                            onClick={() => handleEvaluate(req)}
-                                        >
-                                            Avaliar
-                                        </Button>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                                                    onClick={() => handleEvaluate(req)}
+                                                >
+                                                    <ClipboardCheck className="h-5 w-5" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Avaliar Prioridade</p>
+                                            </TooltipContent>
+                                        </Tooltip>
                                     </div>
                                 </div>
                             ))}
@@ -196,17 +217,25 @@ const Dashboard = () => {
                     ) : (
                         <div className="space-y-3">
                              {surgicalQueue.map((req) => (
-                                <div key={req.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded shadow-sm">
+                                <div key={req.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded shadow-sm group">
                                     <div className="flex items-center gap-3">
                                         <Badge className={`${getPriorityBadgeColor(req.cfmPriority)} text-white border-0 h-8 w-8 rounded-full flex items-center justify-center p-0`}>
                                             P{req.cfmPriority}
                                         </Badge>
                                         <div>
                                             <p className="font-medium text-sm text-gray-900">{req.patientName}</p>
-                                            <p className="text-xs text-gray-500 truncate max-w-[150px]">{req.surgeryType}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-xs text-gray-500 truncate max-w-[150px]">{req.surgeryType}</p>
+                                                {req.sisregId && <Badge variant="secondary" className="text-[10px] h-4 px-1">SISREG: {req.sisregId}</Badge>}
+                                            </div>
                                         </div>
                                     </div>
-                                    <Button variant="ghost" size="sm" onClick={() => handleReview(req)}>Revisar</Button>
+                                    <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => handleEdit(req)}>
+                                            <Edit2 className="h-3 w-3 mr-1" /> Editar
+                                        </Button>
+                                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => handleReview(req)}>Revisar</Button>
+                                    </div>
                                 </div>
                              ))}
                         </div>
@@ -228,17 +257,25 @@ const Dashboard = () => {
                     ) : (
                         <div className="space-y-3">
                              {inpatientQueue.map((req) => (
-                                <div key={req.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded shadow-sm">
+                                <div key={req.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded shadow-sm group">
                                     <div className="flex items-center gap-3">
                                         <Badge className={`${getPriorityBadgeColor(req.cfmPriority)} text-white border-0 h-8 w-8 rounded-full flex items-center justify-center p-0`}>
                                             P{req.cfmPriority}
                                         </Badge>
                                         <div>
                                             <p className="font-medium text-sm text-gray-900">{req.patientName}</p>
-                                            <p className="text-xs text-gray-500 truncate max-w-[150px]">{req.clinicalReason}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-xs text-gray-500 truncate max-w-[150px]">{req.clinicalReason}</p>
+                                                {req.sisregId && <Badge variant="secondary" className="text-[10px] h-4 px-1">SISREG: {req.sisregId}</Badge>}
+                                            </div>
                                         </div>
                                     </div>
-                                    <Button variant="ghost" size="sm" onClick={() => handleReview(req)}>Revisar</Button>
+                                    <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => handleEdit(req)}>
+                                            <Edit2 className="h-3 w-3 mr-1" /> Editar
+                                        </Button>
+                                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => handleReview(req)}>Revisar</Button>
+                                    </div>
                                 </div>
                              ))}
                         </div>
@@ -280,6 +317,11 @@ const Dashboard = () => {
                 open={evaluationModalOpen}
                 onOpenChange={setEvaluationModalOpen}
                 isReview={isReview}
+            />
+            <EditDetailsModal
+                request={selectedRequest}
+                open={editModalOpen}
+                onOpenChange={setEditModalOpen}
             />
           </>
       )}

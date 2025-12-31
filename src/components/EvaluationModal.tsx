@@ -43,6 +43,7 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
     const [isPalliative, setIsPalliative] = useState<boolean>(false);
 
     const [calculatedPriority, setCalculatedPriority] = useState<number | null>(null);
+    const [calculationReason, setCalculationReason] = useState<string>("");
 
     // Exit State
     const [showExitOptions, setShowExitOptions] = useState(false);
@@ -62,6 +63,7 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
             setHasLimitation(undefined);
             setIsPalliative(false);
             setCalculatedPriority(null);
+            setCalculationReason("");
             setShowExitOptions(false);
             setExitReason("");
         }
@@ -71,11 +73,13 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
     useEffect(() => {
         if (isPalliative) {
             setCalculatedPriority(5);
+            setCalculationReason("Motivo: Paciente em fase terminal / cuidados paliativos exclusivos.");
             return;
         }
 
         if (needsSupport === undefined || highRecovery === undefined || hasLimitation === undefined) {
             setCalculatedPriority(null);
+            setCalculationReason("");
             return;
         }
 
@@ -85,12 +89,22 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
 
         // Logic based on CFM 2.156/2016 interpretation
         if (S) {
-            if (R && !L) setCalculatedPriority(1);
-            else setCalculatedPriority(3);
+            if (R && !L) {
+                setCalculatedPriority(1);
+                setCalculationReason("Motivo: Requer suporte à vida + Alta probabilidade de recuperação + Sem limitação terapêutica.");
+            } else {
+                setCalculatedPriority(3);
+                setCalculationReason("Motivo: Requer suporte à vida, mas com baixa recuperação ou limitação terapêutica.");
+            }
         } else {
             // S=N
-            if (R && !L) setCalculatedPriority(2);
-            else setCalculatedPriority(4);
+            if (R && !L) {
+                setCalculatedPriority(2);
+                setCalculationReason("Motivo: Monitorização intensiva + Alta probabilidade de recuperação + Sem limitação terapêutica.");
+            } else {
+                setCalculatedPriority(4);
+                setCalculationReason("Motivo: Estável, mas com baixa recuperação ou limitação terapêutica.");
+            }
         }
 
     }, [needsSupport, highRecovery, hasLimitation, isPalliative]);
@@ -98,18 +112,31 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
     const handleConfirm = async () => {
         if (calculatedPriority === null) return;
 
+        // Defensive validation (Bugfix)
+        if (!isPalliative && (needsSupport === undefined || highRecovery === undefined || hasLimitation === undefined)) {
+             toast({
+                title: "Dados incompletos",
+                description: "Por favor, responda todas as perguntas do checklist.",
+                variant: "destructive"
+            });
+            return;
+        }
+
         try {
             const previousPriority = request.cfmPriority;
+
+            // Explicit boolean conversion to avoid undefined
+            const answers = {
+                needsSupport: needsSupport === "yes",
+                highRecovery: highRecovery === "yes",
+                hasLimitation: hasLimitation === "yes",
+                isPalliative: !!isPalliative
+            };
 
             await updateRequest(request.id, {
                 status: 'waiting_bed',
                 cfmPriority: calculatedPriority,
-                cfmAnswers: {
-                    needsSupport: needsSupport === "yes",
-                    highRecovery: highRecovery === "yes",
-                    hasLimitation: hasLimitation === "yes",
-                    isPalliative
-                },
+                cfmAnswers: answers,
                 evaluatedAt: Timestamp.now()
             }, {
                 action: isReview ? 'revised_priority' : 'evaluated',
@@ -119,14 +146,15 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
             });
 
             toast({
-                title: isReview ? "Prioridade Atualizada" : "Paciente Regulado",
+                title: isReview ? "Prioridade Atualizada" : "Prioridade Confirmada",
                 description: `Paciente classificado como PRIORIDADE ${calculatedPriority}.`,
             });
             onOpenChange(false);
         } catch (error) {
+            console.error(error);
             toast({
                 title: "Erro",
-                description: "Falha ao salvar a regulação.",
+                description: "Falha ao salvar a regulação. Verifique sua conexão.",
                 variant: "destructive"
             });
         }
@@ -222,9 +250,9 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
                     <>
                         <Alert className="bg-blue-50 border-blue-200">
                             <InfoIcon className="h-4 w-4 text-blue-600" />
-                            <AlertTitle className="text-blue-800">Critério de Prioridade</AlertTitle>
-                            <AlertDescription className="text-blue-700 text-sm">
-                                A prioridade é definida pelo equilíbrio entre a <b>instabilidade clínica</b> (necessidade de intervenção) e o <b>prognóstico de recuperação</b>.
+                            <AlertTitle className="text-blue-800">Diretriz Clínica</AlertTitle>
+                            <AlertDescription className="text-blue-700 text-sm mt-1 leading-relaxed">
+                                Este protocolo baseia-se na Resolução CFM nº 2.156/2016, servindo como norteador clínico e administrativo para auxiliar na decisão de priorização. A classificação sugerida não impede a regulação e pode ser revisada periodicamente pela equipe médica conforme a evolução do quadro.
                             </AlertDescription>
                         </Alert>
 
@@ -289,7 +317,7 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
 
                             {/* Result Block */}
                             {calculatedPriority && (
-                                <div className={`mt-6 p-4 rounded-lg border flex items-center justify-between ${getPriorityColor(calculatedPriority)}`}>
+                                <div className={`mt-6 p-4 rounded-lg border ${getPriorityColor(calculatedPriority)}`}>
                                     <div className="flex items-center gap-3">
                                         <AlertTriangleIcon className="h-6 w-6" />
                                         <div>
@@ -297,6 +325,9 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
                                             <p className="text-2xl font-bold">PRIORIDADE {calculatedPriority}</p>
                                         </div>
                                     </div>
+                                    <p className="text-xs mt-2 opacity-80 font-medium border-t border-black/10 pt-2">
+                                        {calculationReason}
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -304,7 +335,7 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
                         <DialogFooter>
                             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
                             <Button onClick={handleConfirm} disabled={!calculatedPriority}>
-                                {isReview ? "Atualizar Regulação" : "Confirmar Regulação"}
+                                {isReview ? "Confirmar Priorização" : "Confirmar Priorização"}
                             </Button>
                         </DialogFooter>
                     </>

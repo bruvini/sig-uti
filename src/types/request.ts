@@ -7,8 +7,10 @@ export const RequestStatusEnum = z.enum([
   "pending_review",
   "refused_nir",
   "waiting_bed",
-  "finished", // Successfully bed assigned (future)
-  "canceled"  // Removed from queue (death, discharge, transfer, error)
+  "regulated", // Assigned to a bed, but not physically admitted yet
+  "admitted", // Physically in the bed
+  "finished", // Discharged/Historical
+  "canceled"  // Removed from queue
 ]);
 export const EmergencySectorEnum = z.enum(["CEDUG", "Centro Cirúrgico"]);
 
@@ -43,6 +45,11 @@ const BaseRequestSchema = z.object({
   // SISREG Integration
   sisregId: z.string().optional(),
   clinicalDetails: z.string().optional(),
+
+  // Bed Assignment (Regulation)
+  assignedBedId: z.string().optional(),
+  assignedUnitId: z.string().optional(), // Helper
+  regulationJustification: z.string().optional(), // If priority was inverted
 
   auditHistory: z.array(z.custom<AuditEntry>()).optional(),
 });

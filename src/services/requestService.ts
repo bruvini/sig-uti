@@ -59,8 +59,6 @@ export const updateRequest = async (
 }
 
 export const subscribeToPendingRequests = (callback: (requests: (RequestData & { id: string })[]) => void) => {
-  // REMOVED orderBy("createdAt", "desc") to avoid "Index Required" error in Firestore without console access.
-  // Sorting will be done client-side.
   const q = query(
     collection(db, COLLECTION_NAME),
     where("status", "==", "pending_review")
@@ -109,3 +107,27 @@ export const subscribeToWaitingRequests = (callback: (requests: (RequestData & {
       callback(requests);
     });
   };
+
+export const subscribeToRegulatedRequests = (callback: (requests: (RequestData & { id: string })[]) => void) => {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where("status", "==", "regulated")
+    );
+
+    return onSnapshot(q, (snapshot: QuerySnapshot) => {
+      const requests = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as (RequestData & { id: string })[];
+
+      // Sort by newest regulated
+      requests.sort((a, b) => {
+          // Fallback to updated at or evaluated at
+          const tA = a.evaluatedAt?.seconds || 0;
+          const tB = b.evaluatedAt?.seconds || 0;
+          return tB - tA;
+      });
+
+      callback(requests);
+    });
+};

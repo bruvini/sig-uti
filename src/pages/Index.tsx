@@ -3,7 +3,10 @@ import NewRequestModal from "@/components/NewRequestModal";
 import RefusalModal from "@/components/RefusalModal";
 import EvaluationModal from "@/components/EvaluationModal";
 import EditDetailsModal from "@/components/EditDetailsModal";
-import { subscribeToPendingRequests, subscribeToWaitingRequests } from "@/services/requestService";
+import BedAvailability from "@/components/BedAvailability";
+import { subscribeToPendingRequests, subscribeToWaitingRequests, subscribeToRegulatedRequests } from "@/services/requestService";
+import { confirmAdmission, cancelRegulation } from "@/services/bedService";
+
 import { RequestData } from "@/types/request";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,13 +24,15 @@ import {
     ListOrdered,
     BedDouble,
     ArrowRight,
-    LogOut
+    LogOut,
+    Ambulance
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 const Dashboard = () => {
   const [pendingRequests, setPendingRequests] = useState<(RequestData & { id: string })[]>([]);
   const [waitingRequests, setWaitingRequests] = useState<(RequestData & { id: string })[]>([]);
+  const [regulatedRequests, setRegulatedRequests] = useState<(RequestData & { id: string })[]>([]);
 
   // Modal States
   const [refusalModalOpen, setRefusalModalOpen] = useState(false);
@@ -38,15 +43,13 @@ const Dashboard = () => {
   const [isReview, setIsReview] = useState(false);
 
   useEffect(() => {
-    const unsubPending = subscribeToPendingRequests((requests) => {
-      setPendingRequests(requests);
-    });
-    const unsubWaiting = subscribeToWaitingRequests((requests) => {
-        setWaitingRequests(requests);
-    });
+    const unsubPending = subscribeToPendingRequests(setPendingRequests);
+    const unsubWaiting = subscribeToWaitingRequests(setWaitingRequests);
+    const unsubRegulated = subscribeToRegulatedRequests(setRegulatedRequests);
     return () => {
         unsubPending();
         unsubWaiting();
+        unsubRegulated();
     };
   }, []);
 
@@ -71,6 +74,23 @@ const Dashboard = () => {
     setSelectedRequest(req);
     setEditModalOpen(true);
   };
+
+  const handleAdmission = async (reqId: string) => {
+      try {
+          await confirmAdmission(reqId);
+      } catch (e) {
+          console.error(e);
+      }
+  };
+
+  const handleCancelRegulation = async (req: RequestData & { id: string }) => {
+      if (!req.assignedBedId) return;
+      try {
+          await cancelRegulation(req.id, req.assignedBedId);
+      } catch (e) {
+          console.error(e);
+      }
+  }
 
   const getRequestTypeLabel = (type: string) => {
       switch(type) {
@@ -173,8 +193,8 @@ const Dashboard = () => {
            </Card>
            <Card className="bg-white shadow-sm border-gray-100">
              <CardContent className="p-4">
-               <p className="text-sm text-gray-500">Ocupação Atual</p>
-               <p className="text-2xl font-bold text-gray-800">--%</p>
+               <p className="text-sm text-gray-500">Regulados (Em trânsito)</p>
+               <p className="text-2xl font-bold text-orange-600">{regulatedRequests.length}</p>
              </CardContent>
            </Card>
            <Card className="bg-white shadow-sm border-gray-100">
@@ -185,7 +205,7 @@ const Dashboard = () => {
            </Card>
         </section>
 
-        {/* 3. PENDÊNCIAS DE AVALIAÇÃO (Action Block) */}
+        {/* 3. PENDÊNCIAS DE AVALIAÇÃO */}
         <section className="space-y-4">
              <div className="flex items-center gap-3">
                  <div className="h-8 w-1 bg-yellow-500 rounded-full" />
@@ -271,6 +291,40 @@ const Dashboard = () => {
                  )}
              </div>
         </section>
+
+        {/* EXTRA: REGULATED / IN TRANSIT (New Block) */}
+        {regulatedRequests.length > 0 && (
+            <section className="space-y-4">
+                <div className="flex items-center gap-3">
+                    <div className="h-8 w-1 bg-orange-500 rounded-full" />
+                    <h2 className="text-lg font-semibold tracking-tight text-gray-800">Em Trânsito / Admissão Pendente</h2>
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-800 font-mono">
+                        {regulatedRequests.length}
+                    </Badge>
+                </div>
+
+                <div className="bg-orange-50/50 border border-orange-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {regulatedRequests.map(req => (
+                        <div key={req.id} className="bg-white p-4 rounded-lg border border-orange-100 shadow-sm flex flex-col gap-3">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="font-bold text-gray-900">{req.patientName}</h3>
+                                    <p className="text-xs text-gray-500">Destino: Leito Definido</p>
+                                </div>
+                                <Ambulance className="h-5 w-5 text-orange-500" />
+                            </div>
+                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                                <span className="font-semibold">Justificativa:</span> {req.regulationJustification || "Padrão"}
+                            </div>
+                            <div className="flex gap-2">
+                                <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => handleCancelRegulation(req)}>Cancelar</Button>
+                                <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => handleAdmission(req.id)}>Confirmar Admissão</Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+        )}
 
         {/* 4. ZONA DE GUERRA (Split View) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -390,19 +444,7 @@ const Dashboard = () => {
 
             {/* COLUNA DIREITA: LEITOS */}
             <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                     <div className="h-6 w-1 bg-purple-500 rounded-full" />
-                     <h2 className="text-lg font-semibold tracking-tight text-gray-800">Disponibilidade de Leitos (UTI)</h2>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 h-[600px] flex items-center justify-center relative overflow-hidden bg-grid-slate-100">
-                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-                    <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50/80 backdrop-blur-sm max-w-xs mx-auto">
-                        <BedDouble className="h-10 w-10 text-gray-300 mx-auto mb-4" />
-                        <h4 className="font-medium text-gray-600">Mapa de Leitos</h4>
-                        <p className="text-sm text-gray-400 mt-2">Funcionalidade de gestão visual de leitos e isolamentos em desenvolvimento.</p>
-                    </div>
-                </div>
+                <BedAvailability />
             </div>
 
         </div>

@@ -110,6 +110,15 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
     }, [needsSupport, highRecovery, hasLimitation, isPalliative]);
 
     const handleConfirm = async () => {
+        if (!request?.id) {
+            toast({
+                title: "Erro interno",
+                description: "ID da solicitação não encontrado.",
+                variant: "destructive"
+            });
+            return;
+        }
+
         if (calculatedPriority === null) return;
 
         // Defensive validation (Bugfix)
@@ -123,7 +132,8 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
         }
 
         try {
-            const previousPriority = request.cfmPriority;
+            // Use fallback to null for previousPriority if undefined
+            const previousPriority = request.cfmPriority || null;
 
             // Explicit boolean conversion to avoid undefined
             const answers = {
@@ -150,11 +160,11 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
                 description: `Paciente classificado como PRIORIDADE ${calculatedPriority}.`,
             });
             onOpenChange(false);
-        } catch (error) {
-            console.error(error);
+        } catch (error: any) {
+            console.error("Erro detalhado do Firestore:", error);
             toast({
-                title: "Erro",
-                description: "Falha ao salvar a regulação. Verifique sua conexão.",
+                title: "Erro ao salvar",
+                description: error.message || "Falha ao salvar a regulação. Verifique sua conexão.",
                 variant: "destructive"
             });
         }
@@ -162,6 +172,7 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
 
     const handleDiscard = async () => {
         if (!exitReason) return;
+        if (!request?.id) return;
 
         try {
             await updateRequest(request.id, {
@@ -178,10 +189,11 @@ const EvaluationModal: React.FC<EvaluationModalProps> = ({ request, open, onOpen
                 description: "Paciente removido da fila com sucesso.",
             });
             onOpenChange(false);
-        } catch (error) {
+        } catch (error: any) {
+             console.error("Erro ao descartar:", error);
              toast({
                 title: "Erro",
-                description: "Falha ao remover paciente.",
+                description: error.message || "Falha ao remover paciente.",
                 variant: "destructive"
             });
         }

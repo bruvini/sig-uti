@@ -1,124 +1,63 @@
-import { useState } from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
-import { StatCard } from "@/components/dashboard/StatCard";
-import { PriorityDistribution } from "@/components/dashboard/PriorityDistribution";
-import { BedOccupancy } from "@/components/dashboard/BedOccupancy";
-import { RequestQueue } from "@/components/queue/RequestQueue";
-import { RequestDetailModal } from "@/components/modals/RequestDetailModal";
-import { EthicsNotice } from "@/components/shared/EthicsNotice";
-import { mockRequests, mockStats } from "@/data/mockData";
-import { ICURequest } from "@/types/icu";
-import {
-  ClipboardList,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-} from "lucide-react";
+import React from 'react';
 
-const Index = () => {
-  const [selectedRequest, setSelectedRequest] = useState<ICURequest | null>(null);
-
+const Dashboard = () => {
   return (
-    <MainLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground">
-              Central de Regulação de Leitos UTI
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-success" />
-            Sistema operacional
-          </div>
-        </div>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Topo: Cabeçalho (Header) */}
+      <header className="w-full bg-white shadow-sm p-4 border-b border-gray-200">
+        <h1 className="text-xl font-bold text-gray-800">SIG-UTI Dashboard</h1>
+      </header>
 
-        {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Solicitações Pendentes"
-            value={mockStats.pendingRequests}
-            subtitle="Aguardando avaliação"
-            icon={ClipboardList}
-            variant="warning"
-          />
-          <StatCard
-            title="Tempo Médio de Espera"
-            value={`${mockStats.averageWaitTime}h`}
-            subtitle="Para aprovação"
-            icon={Clock}
-            variant="primary"
-          />
-          <StatCard
-            title="Aprovadas Hoje"
-            value={mockStats.approvedToday}
-            subtitle="+3 vs ontem"
-            icon={CheckCircle}
-            variant="success"
-            trend={{ value: 12, isPositive: true }}
-          />
-          <StatCard
-            title="Negadas Hoje"
-            value={mockStats.deniedToday}
-            subtitle="Com justificativa CFM"
-            icon={XCircle}
-            variant="destructive"
-          />
-        </div>
+      <main className="flex-1 p-6 space-y-6">
+        {/* Abaixo do Header: Indicadores (KPIs) */}
+        <section className="w-full bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+          <p className="text-gray-500 text-center">Área reservada para indicadores gerais</p>
+        </section>
 
-        {/* Charts Row */}
-        <div className="grid gap-4 lg:grid-cols-2">
-          <PriorityDistribution data={mockStats.requestsByPriority} />
-          <BedOccupancy
-            available={mockStats.availableBeds}
-            total={mockStats.totalBeds}
-            occupancyRate={mockStats.occupancyRate}
-          />
-        </div>
+        {/* Corpo Principal: Grid dividida */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* Ethics Notice */}
-        <EthicsNotice />
-
-        {/* Queue Preview */}
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">Fila de Espera</h2>
-              <p className="text-sm text-muted-foreground">
-                Solicitações ordenadas por prioridade CFM
-              </p>
+          {/* Coluna da Esquerda (Filas de Pacientes) */}
+          <div className="flex flex-col gap-6">
+            {/* Bloco Superior */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex-1">
+              <h2 className="font-semibold text-lg mb-2 text-gray-700">Fila Cirúrgica</h2>
+              <div className="flex items-center justify-center h-32 bg-gray-50 rounded border border-dashed border-gray-200">
+                <p className="text-gray-400">Pacientes Cirúrgicos Aguardando</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <AlertTriangle className="h-4 w-4 text-priority-1" />
-              <span className="text-muted-foreground">
-                {mockRequests.filter((r) => r.cfmPriority <= 2 && r.status === "pending").length} pacientes urgentes
-              </span>
+
+            {/* Bloco Inferior */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex-1">
+              <h2 className="font-semibold text-lg mb-2 text-gray-700">Fila de Internação</h2>
+              <div className="flex items-center justify-center h-32 bg-gray-50 rounded border border-dashed border-gray-200">
+                <p className="text-gray-400">Pacientes Internados Aguardando</p>
+              </div>
             </div>
           </div>
 
-          <RequestQueue
-            requests={mockRequests}
-            onSelectRequest={setSelectedRequest}
-          />
-        </div>
+          {/* Coluna da Direita (Gestão de Leitos) */}
+          <div className="flex flex-col gap-6">
+            {/* Bloco Superior */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex-1">
+              <h2 className="font-semibold text-lg mb-2 text-gray-700">Leitos Disponíveis</h2>
+              <div className="flex items-center justify-center h-32 bg-gray-50 rounded border border-dashed border-gray-200">
+                <p className="text-gray-400">Leitos Vagos Disponíveis</p>
+              </div>
+            </div>
 
-        {/* Request Detail Modal */}
-        <RequestDetailModal
-          request={selectedRequest}
-          open={!!selectedRequest}
-          onOpenChange={(open) => !open && setSelectedRequest(null)}
-          onApprove={(req) => console.log("Approved:", req)}
-          onDeny={(req, reason, obs) => console.log("Denied:", req, reason, obs)}
-          onReevaluate={(req, priority, just) =>
-            console.log("Reevaluated:", req, priority, just)
-          }
-        />
-      </div>
-    </MainLayout>
+            {/* Bloco Inferior */}
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex-1">
+              <h2 className="font-semibold text-lg mb-2 text-gray-700">Altas Pendentes</h2>
+              <div className="flex items-center justify-center h-32 bg-gray-50 rounded border border-dashed border-gray-200">
+                <p className="text-gray-400">Leitos Passíveis de Alta</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 };
 
-export default Index;
+export default Dashboard;

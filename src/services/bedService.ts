@@ -13,7 +13,8 @@ import {
   writeBatch,
   getDocs,
   Timestamp,
-  arrayUnion
+  arrayUnion,
+  deleteDoc
 } from "firebase/firestore";
 import { Unit, Bed, BedStatus } from "@/types/bed";
 import { RequestData, AuditEntry } from "@/types/request";
@@ -28,6 +29,17 @@ export const addUnit = async (unit: Omit<Unit, "id" | "createdAt">) => {
         ...unit,
         createdAt: serverTimestamp()
     });
+};
+
+export const updateUnit = async (id: string, data: Partial<Unit>) => {
+    const ref = doc(db, UNITS_COLLECTION, id);
+    await updateDoc(ref, data);
+};
+
+export const deleteUnit = async (id: string) => {
+    // Optional: Check if unit has beds before deleting
+    const ref = doc(db, UNITS_COLLECTION, id);
+    await deleteDoc(ref);
 };
 
 export const subscribeToUnits = (callback: (units: (Unit & { id: string })[]) => void) => {
@@ -47,10 +59,20 @@ export const subscribeToBeds = (callback: (beds: (Bed & { id: string })[]) => vo
     });
 };
 
+export const updateBed = async (id: string, data: Partial<Bed>) => {
+    const ref = doc(db, BEDS_COLLECTION, id);
+    await updateDoc(ref, {
+        ...data,
+        updatedAt: serverTimestamp()
+    });
+};
+
+export const deleteBed = async (id: string) => {
+    const ref = doc(db, BEDS_COLLECTION, id);
+    await deleteDoc(ref);
+};
+
 export const bulkCreateBeds = async (unitId: string, unitName: string, start: number, end: number) => {
-    // 1. Check existing beds to avoid duplicates (Client side check or simple query)
-    // For simplicity in MVP, we just query all beds for this unit and filter in memory or query specifically.
-    // Querying existing numbers:
     const q = query(collection(db, BEDS_COLLECTION), where("unitId", "==", unitId));
     const snapshot = await getDocs(q);
     const existingNumbers = new Set(snapshot.docs.map(d => d.data().bedNumber));

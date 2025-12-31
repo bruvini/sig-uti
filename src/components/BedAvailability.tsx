@@ -5,6 +5,7 @@ import { subscribeToBeds, updateBedStatus, assignPatientToBed, subscribeToUnits 
 import { subscribeToWaitingRequests } from "@/services/requestService";
 import { useToast } from "@/components/ui/use-toast";
 import StructureManager from "./StructureManager";
+import InformAvailabilityModal from "./InformAvailabilityModal";
 
 import {
   Dialog,
@@ -28,15 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { BedDouble, MoreVertical, CheckCircle, AlertTriangle, XCircle, PenTool, Activity } from "lucide-react";
+import { BedDouble, CheckCircle, AlertTriangle, MoreVertical } from "lucide-react";
 
 // Helper to sort requests by priority
 const sortRequests = (reqs: RequestData[]) => {
@@ -44,7 +37,6 @@ const sortRequests = (reqs: RequestData[]) => {
         const pA = a.cfmPriority || 99;
         const pB = b.cfmPriority || 99;
         if (pA !== pB) return pA - pB;
-        // Secondary sort by date (simplified here, assuming createdAt exists or handled elsewhere)
         return 0;
     });
 };
@@ -72,20 +64,14 @@ const BedAvailability = () => {
         };
     }, []);
 
-    const handleStatusUpdate = async (bedId: string, status: BedStatus) => {
-        try {
-            await updateBedStatus(bedId, status);
-            toast({ title: "Status do leito atualizado" });
-        } catch (e) {
-            toast({ title: "Erro ao atualizar status", variant: "destructive" });
-        }
-    };
+    // Filter Logic: Only show available beds
+    const availableBeds = beds.filter(b =>
+        ['clean', 'discharge_confirmed', 'discharge_unconfirmed'].includes(b.status)
+    );
 
     const handleBedClick = (bed: Bed & { id: string }) => {
-        if (bed.status === 'clean' || bed.status === 'discharge_confirmed') {
-            setSelectedBed(bed);
-            setRegulationOpen(true);
-        }
+        setSelectedBed(bed);
+        setRegulationOpen(true);
     };
 
     const handleSelectPatient = (req: RequestData & { id: string }) => {
@@ -133,23 +119,18 @@ const BedAvailability = () => {
 
     const getStatusColor = (status: BedStatus) => {
         switch(status) {
-            case 'clean': return "bg-green-100 text-green-700 border-green-200 hover:bg-green-200";
-            case 'occupied': return "bg-blue-100 text-blue-700 border-blue-200";
-            case 'discharge_confirmed': return "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200";
-            case 'maintenance': return "bg-red-100 text-red-700 border-red-200";
-            case 'closed': return "bg-gray-100 text-gray-500 border-gray-200";
-            default: return "bg-gray-50";
+            case 'clean': return "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 cursor-pointer shadow-sm hover:shadow-md";
+            case 'discharge_confirmed': return "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 cursor-pointer shadow-sm hover:shadow-md";
+            case 'discharge_unconfirmed': return "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 cursor-pointer";
+            default: return "bg-gray-50 opacity-50"; // Should not be seen ideally
         }
     };
 
     const getStatusLabel = (status: string) => {
         switch(status) {
             case 'clean': return "Limpo/Disponível";
-            case 'occupied': return "Ocupado";
             case 'discharge_confirmed': return "Alta Confirmada";
-            case 'discharge_unconfirmed': return "Alta ñ Confirmada";
-            case 'maintenance': return "Manutenção";
-            case 'closed': return "Bloqueado";
+            case 'discharge_unconfirmed': return "Previsão de Alta";
             default: return status;
         }
     };
@@ -159,49 +140,35 @@ const BedAvailability = () => {
             <div className="flex items-center justify-between">
                  <div className="flex items-center gap-3">
                      <div className="h-6 w-1 bg-purple-500 rounded-full" />
-                     <h2 className="text-lg font-semibold tracking-tight text-gray-800">Disponibilidade de Leitos</h2>
+                     <h2 className="text-lg font-semibold tracking-tight text-gray-800">Oferta de Vagas</h2>
                 </div>
-                <StructureManager />
+                <div className="flex gap-2">
+                    <InformAvailabilityModal />
+                    <StructureManager />
+                </div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 min-h-[400px]">
-                {beds.length === 0 ? (
+                {availableBeds.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8 text-center">
                         <BedDouble className="h-10 w-10 mb-2 opacity-20" />
-                        <p>Nenhum leito cadastrado.</p>
-                        <p className="text-xs">Use o ícone de engrenagem para configurar.</p>
+                        <p>Nenhuma vaga ofertada no momento.</p>
+                        <p className="text-xs mt-2">Clique em "Informar Disponibilidade" para abrir leitos.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                        {beds.map(bed => (
-                            <div key={bed.id} className={`p-3 rounded-lg border text-center relative group transition-all ${getStatusColor(bed.status)}`}>
-                                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-3 w-3" /></Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent>
-                                            <DropdownMenuLabel>Alterar Status</DropdownMenuLabel>
-                                            <DropdownMenuSeparator />
-                                            {BedStatusEnum.options.map(s => (
-                                                <DropdownMenuItem key={s} onClick={() => handleStatusUpdate(bed.id, s)}>
-                                                    {getStatusLabel(s)}
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </div>
-
-                                <div
-                                    className="cursor-pointer"
-                                    onClick={() => handleBedClick(bed)}
-                                >
-                                    <p className="text-xs font-semibold uppercase opacity-70 truncate">{bed.unitName}</p>
-                                    <h4 className="text-2xl font-bold my-1">{bed.bedNumber}</h4>
-                                    <Badge variant="outline" className="bg-white/50 text-[10px] whitespace-nowrap">
-                                        {getStatusLabel(bed.status)}
-                                    </Badge>
-                                </div>
+                        {availableBeds.map(bed => (
+                            <div
+                                key={bed.id}
+                                className={`p-4 rounded-lg border text-center relative group transition-all ${getStatusColor(bed.status)}`}
+                                onClick={() => handleBedClick(bed)}
+                            >
+                                <p className="text-xs font-semibold uppercase opacity-70 truncate">{bed.unitName}</p>
+                                <h4 className="text-3xl font-bold my-2">{bed.bedNumber}</h4>
+                                <Badge variant="outline" className="bg-white/50 text-[10px] whitespace-nowrap border-0">
+                                    {getStatusLabel(bed.status)}
+                                </Badge>
+                                <p className="text-[10px] mt-2 opacity-60">Toque para regular</p>
                             </div>
                         ))}
                     </div>

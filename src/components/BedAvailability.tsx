@@ -29,7 +29,23 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { BedDouble, CheckCircle, AlertTriangle, MoreVertical } from "lucide-react";
+import {
+    BedDouble,
+    CheckCircle,
+    AlertTriangle,
+    MoreVertical,
+    UserPlus,
+    RefreshCw,
+    XCircle
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Helper to sort requests by priority
 const sortRequests = (reqs: RequestData[]) => {
@@ -55,6 +71,11 @@ const BedAvailability = () => {
     const [pendingAssignment, setPendingAssignment] = useState<{ reqId: string, bedId: string, unitId: string } | null>(null);
     const [justificationText, setJustificationText] = useState("");
 
+    // Removal Logic
+    const [removalOpen, setRemovalOpen] = useState(false);
+    const [bedToRemove, setBedToRemove] = useState<(Bed & { id: string }) | null>(null);
+    const [removalReason, setRemovalReason] = useState("");
+
     useEffect(() => {
         const unsubBeds = subscribeToBeds(setBeds);
         const unsubReqs = subscribeToWaitingRequests(setWaitingRequests);
@@ -69,7 +90,7 @@ const BedAvailability = () => {
         ['clean', 'discharge_confirmed', 'discharge_unconfirmed'].includes(b.status)
     );
 
-    const handleBedClick = (bed: Bed & { id: string }) => {
+    const handleRegularPatient = (bed: Bed & { id: string }) => {
         setSelectedBed(bed);
         setRegulationOpen(true);
     };
@@ -117,27 +138,55 @@ const BedAvailability = () => {
         }
     };
 
-    const getStatusColor = (status: BedStatus) => {
-        switch(status) {
-            case 'clean': return "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 cursor-pointer shadow-sm hover:shadow-md";
-            case 'discharge_confirmed': return "bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200 cursor-pointer shadow-sm hover:shadow-md";
-            case 'discharge_unconfirmed': return "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 cursor-pointer";
-            default: return "bg-gray-50 opacity-50"; // Should not be seen ideally
+    const handleStatusChange = async (bedId: string, status: BedStatus) => {
+        try {
+            await updateBedStatus(bedId, status);
+            toast({ title: "Status atualizado" });
+        } catch(e) {
+            toast({ title: "Erro ao atualizar", variant: "destructive" });
+        }
+    }
+
+    const handleRemoveAvailability = (bed: Bed & { id: string }) => {
+        setBedToRemove(bed);
+        setRemovalOpen(true);
+    };
+
+    const confirmRemoval = async () => {
+        if (!bedToRemove || removalReason.length < 5) return;
+        try {
+            await updateBedStatus(bedToRemove.id, 'closed', removalReason);
+            toast({ title: "Leito removido da disponibilidade" });
+            setRemovalOpen(false);
+            setRemovalReason("");
+            setBedToRemove(null);
+        } catch(e) {
+            toast({ title: "Erro ao remover", variant: "destructive" });
         }
     };
 
     const getStatusLabel = (status: string) => {
         switch(status) {
-            case 'clean': return "Limpo/Disponível";
+            case 'clean': return "Limpo / Disponível";
             case 'discharge_confirmed': return "Alta Confirmada";
             case 'discharge_unconfirmed': return "Previsão de Alta";
+            case 'maintenance': return "Em Mecânica"; // Terminology Fix
             default: return status;
         }
     };
 
+    const getStatusBadgeColor = (status: string) => {
+        switch(status) {
+            case 'clean': return "bg-green-100 text-green-700 border-green-200";
+            case 'discharge_confirmed': return "bg-yellow-100 text-yellow-700 border-yellow-200";
+            case 'discharge_unconfirmed': return "bg-blue-50 text-blue-700 border-blue-200";
+            default: return "bg-gray-100 text-gray-500";
+        }
+    }
+
     return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between">
+        <div className="space-y-4 h-full flex flex-col">
+            <div className="flex items-center justify-between shrink-0">
                  <div className="flex items-center gap-3">
                      <div className="h-6 w-1 bg-purple-500 rounded-full" />
                      <h2 className="text-lg font-semibold tracking-tight text-gray-800">Oferta de Vagas</h2>
@@ -148,30 +197,74 @@ const BedAvailability = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 min-h-[400px]">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 overflow-hidden flex flex-col">
                 {availableBeds.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8 text-center">
                         <BedDouble className="h-10 w-10 mb-2 opacity-20" />
-                        <p>Nenhuma vaga ofertada no momento.</p>
-                        <p className="text-xs mt-2">Clique em "Informar Disponibilidade" para abrir leitos.</p>
+                        <p>Nenhuma vaga ofertada.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                        {availableBeds.map(bed => (
-                            <div
-                                key={bed.id}
-                                className={`p-4 rounded-lg border text-center relative group transition-all ${getStatusColor(bed.status)}`}
-                                onClick={() => handleBedClick(bed)}
-                            >
-                                <p className="text-xs font-semibold uppercase opacity-70 truncate">{bed.unitName}</p>
-                                <h4 className="text-3xl font-bold my-2">{bed.bedNumber}</h4>
-                                <Badge variant="outline" className="bg-white/50 text-[10px] whitespace-nowrap border-0">
-                                    {getStatusLabel(bed.status)}
-                                </Badge>
-                                <p className="text-[10px] mt-2 opacity-60">Toque para regular</p>
-                            </div>
-                        ))}
-                    </div>
+                    <ScrollArea className="flex-1">
+                        <div className="flex flex-col gap-2 p-2">
+                            {availableBeds.map(bed => (
+                                <div key={bed.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 transition-colors bg-white shadow-sm">
+                                    {/* LEFT: Info */}
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="flex flex-col items-start gap-1">
+                                            <Badge variant="outline" className={`text-[10px] whitespace-nowrap border-0 ${getStatusBadgeColor(bed.status)}`}>
+                                                {getStatusLabel(bed.status)}
+                                            </Badge>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-xs font-semibold text-gray-500 uppercase">{bed.unitName}</span>
+                                                <span className="text-sm font-bold text-gray-900">Leito {bed.bedNumber}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* CENTER: Timestamp */}
+                                    <div className="hidden md:block text-xs text-gray-400">
+                                        {bed.updatedAt ? `Atualizado às ${new Date(bed.updatedAt.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : '-'}
+                                    </div>
+
+                                    {/* RIGHT: Actions */}
+                                    <div className="flex items-center gap-1">
+                                        <TooltipWrapper text="Regular Paciente">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleRegularPatient(bed)}>
+                                                <UserPlus className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipWrapper>
+
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-700">
+                                                    <RefreshCw className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent>
+                                                <DropdownMenuLabel>Alterar Status</DropdownMenuLabel>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem onClick={() => handleStatusChange(bed.id, 'maintenance')}>
+                                                    Em Mecânica
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleStatusChange(bed.id, 'discharge_confirmed')}>
+                                                    Alta Confirmada
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleStatusChange(bed.id, 'clean')}>
+                                                    Limpo / Pronto
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+
+                                        <TooltipWrapper text="Remover Disponibilidade">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleRemoveAvailability(bed)}>
+                                                <XCircle className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipWrapper>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </ScrollArea>
                 )}
             </div>
 
@@ -245,8 +338,45 @@ const BedAvailability = () => {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* REMOVAL DIALOG */}
+            <Dialog open={removalOpen} onOpenChange={setRemovalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="text-red-600 flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" /> Remover Disponibilidade?
+                        </DialogTitle>
+                        <DialogDescription>
+                            O leito será removido da lista de vagas e voltará para o status "Fechado".
+                            Esta ação requer justificativa.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Textarea
+                            placeholder="Motivo da remoção (ex: Erro de cadastro, Manutenção imprevista)..."
+                            value={removalReason}
+                            onChange={(e) => setRemovalReason(e.target.value)}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setRemovalOpen(false)}>Cancelar</Button>
+                        <Button variant="destructive" onClick={confirmRemoval} disabled={removalReason.length < 5}>
+                            Confirmar Remoção
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
+
+// Simple Tooltip Wrapper
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+const TooltipWrapper = ({ children, text }: { children: React.ReactNode, text: string }) => (
+    <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent><p>{text}</p></TooltipContent>
+    </Tooltip>
+);
 
 export default BedAvailability;

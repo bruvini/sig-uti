@@ -86,14 +86,10 @@ const BedAvailability = () => {
         };
     }, []);
 
-    // Filter Logic: Only show available beds
+    // Filter Logic: Show clean, discharge*, and maintenance (New Rule)
     const availableBeds = beds.filter(b =>
-        ['clean', 'discharge_confirmed', 'discharge_unconfirmed'].includes(b.status)
+        ['clean', 'discharge_confirmed', 'discharge_unconfirmed', 'maintenance'].includes(b.status)
     );
-
-    // Summary Stats
-    const maintenanceCount = beds.filter(b => b.status === 'maintenance').length;
-    const closedCount = beds.filter(b => b.status === 'closed').length;
 
     const handleRegularPatient = (bed: Bed & { id: string }) => {
         setSelectedBed(bed);
@@ -113,13 +109,13 @@ const BedAvailability = () => {
             setJustificationOpen(true);
         } else {
             // Normal Flow
-            executeAssignment(req.id, selectedBed.id, selectedBed.unitId);
+            executeAssignment(req.id, selectedBed.id, selectedBed.unitId, selectedBed.status);
         }
     };
 
-    const executeAssignment = async (reqId: string, bedId: string, unitId: string, justification?: string) => {
+    const executeAssignment = async (reqId: string, bedId: string, unitId: string, bedStatus: BedStatus, justification?: string) => {
         try {
-            await assignPatientToBed(reqId, bedId, unitId, justification);
+            await assignPatientToBed(reqId, bedId, unitId, bedStatus, justification);
             toast({
                 title: "Regulação Confirmada!",
                 description: "Paciente alocado ao leito. Aguardando admissão física."
@@ -139,7 +135,11 @@ const BedAvailability = () => {
             return;
         }
         if (pendingAssignment) {
-            executeAssignment(pendingAssignment.reqId, pendingAssignment.bedId, pendingAssignment.unitId, justificationText);
+            // We need the bed status for pending assignment. We can find it in 'beds' or store in pendingAssignment
+            const bed = beds.find(b => b.id === pendingAssignment.bedId);
+            if (bed) {
+                executeAssignment(pendingAssignment.reqId, pendingAssignment.bedId, pendingAssignment.unitId, bed.status, justificationText);
+            }
         }
     };
 
@@ -175,17 +175,18 @@ const BedAvailability = () => {
             case 'clean': return "Limpo / Disponível";
             case 'discharge_confirmed': return "Alta Confirmada";
             case 'discharge_unconfirmed': return "Previsão de Alta";
-            case 'maintenance': return "Em Mecânica"; // Terminology Fix
+            case 'maintenance': return "Em Mecânica";
             default: return status;
         }
     };
 
     const getStatusBadgeColor = (status: string) => {
         switch(status) {
-            case 'clean': return "bg-green-100 text-green-700 border-green-200";
-            case 'discharge_confirmed': return "bg-yellow-100 text-yellow-700 border-yellow-200";
-            case 'discharge_unconfirmed': return "bg-blue-50 text-blue-700 border-blue-200";
-            default: return "bg-gray-100 text-gray-500";
+            case 'clean': return "bg-green-500 text-white border-transparent hover:bg-green-600";
+            case 'discharge_confirmed': return "bg-yellow-500 text-white border-transparent hover:bg-yellow-600";
+            case 'discharge_unconfirmed': return "bg-blue-400 text-white border-transparent hover:bg-blue-500";
+            case 'maintenance': return "bg-amber-600 text-white border-transparent hover:bg-amber-700";
+            default: return "bg-gray-500 text-white";
         }
     }
 
@@ -216,7 +217,7 @@ const BedAvailability = () => {
                                     {/* LEFT: Info */}
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="flex flex-col items-start gap-1">
-                                            <Badge variant="outline" className={`text-[10px] whitespace-nowrap border-0 ${getStatusBadgeColor(bed.status)}`}>
+                                            <Badge variant="outline" className={`text-[10px] whitespace-nowrap px-2 py-0.5 rounded-full ${getStatusBadgeColor(bed.status)}`}>
                                                 {getStatusLabel(bed.status)}
                                             </Badge>
                                             <div className="flex items-baseline gap-2">
@@ -271,19 +272,6 @@ const BedAvailability = () => {
                         </div>
                     </ScrollArea>
                 )}
-
-                {/* FOOTER: STATUS SUMMARY */}
-                <div className="bg-gray-50 border-t p-2 px-4 flex items-center justify-between text-[10px] text-gray-500">
-                    <div className="flex items-center gap-2">
-                        <Info className="h-3 w-3" />
-                        <span>Resumo Indisponíveis:</span>
-                    </div>
-                    <div className="flex gap-3 font-medium">
-                        <span>{maintenanceCount} em Mecânica</span>
-                        <span>•</span>
-                        <span>{closedCount} Bloqueados</span>
-                    </div>
-                </div>
             </div>
 
             {/* REGULATION DIALOG */}

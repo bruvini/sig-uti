@@ -102,22 +102,6 @@ export const bulkCreateBeds = async (unitId: string, unitName: string, start: nu
 
 export const updateBedStatus = async (bedId: string, status: BedStatus, reason?: string) => {
     const bedRef = doc(db, BEDS_COLLECTION, bedId);
-    // If a reason is provided, we might want to log it somewhere?
-    // For now, prompt implies "salva o motivo em uma coleção de auditoria ou log".
-    // Since we don't have a global audit log collection defined yet,
-    // we could update the bed document with "lastReason" or similar,
-    // OR create a subcollection or separate collection.
-    // Given previous pattern, we stick to updating the document.
-    // However, for Bed Removal (status -> closed), it's critical.
-    // I will add a simple console log or TODO for audit collection if strict requirement,
-    // but the prompt mainly focuses on the UI/UX enforcement.
-    // Actually, "salva o motivo em uma coleção de auditoria ou log".
-    // I'll stick to updating `updatedAt` as the primary side effect, and maybe log locally or if we had a bed history.
-
-    // NOTE: Ideally we should have a `siguti_audit` collection.
-    // I will simply pass the status update for now as per previous service structure,
-    // but if it's "Remover Disponibilidade", we treat it as setting status to 'closed'.
-
     await updateDoc(bedRef, {
         status,
         updatedAt: serverTimestamp()
@@ -129,6 +113,7 @@ export const assignPatientToBed = async (
     requestId: string,
     bedId: string,
     unitId: string,
+    bedStatus: BedStatus, // New Parameter
     justification?: string
 ) => {
     const batch = writeBatch(db);
@@ -139,7 +124,12 @@ export const assignPatientToBed = async (
         action: 'regulated',
         timestamp: Timestamp.now(),
         userParams: 'Médico Regulador',
-        reason: justification || 'Regulação padrão'
+        reason: justification || 'Regulação padrão',
+        details: {
+            bedId,
+            bedStatusAtTime: bedStatus,
+            justification
+        }
     };
 
     batch.update(requestRef, {
@@ -147,6 +137,7 @@ export const assignPatientToBed = async (
         assignedBedId: bedId,
         assignedUnitId: unitId,
         regulationJustification: justification || null,
+        regulationBedStatusSnapshot: bedStatus, // Data Intelligence
         auditHistory: arrayUnion(auditEntry)
     });
 
@@ -182,11 +173,12 @@ export const cancelRegulation = async (requestId: string, bedId: string, reason:
         assignedBedId: null,
         assignedUnitId: null,
         regulationJustification: null,
+        regulationBedStatusSnapshot: null,
         auditHistory: arrayUnion({
             action: 'regulation_cancelled',
             timestamp: Timestamp.now(),
             userParams: 'Médico Regulador',
-            reason: reason // Mandatory reason
+            reason: reason
         })
     });
 

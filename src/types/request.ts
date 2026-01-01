@@ -22,6 +22,7 @@ export interface AuditEntry {
   reason?: string;
   timestamp: Timestamp;
   userParams: string;
+  details?: Record<string, any>; // Flexible details object
 }
 
 // Base Schema
@@ -50,6 +51,7 @@ const BaseRequestSchema = z.object({
   assignedBedId: z.string().optional(),
   assignedUnitId: z.string().optional(), // Helper
   regulationJustification: z.string().optional(), // If priority was inverted
+  regulationBedStatusSnapshot: z.string().optional(), // Snapshot of bed status at regulation time
 
   auditHistory: z.array(z.custom<AuditEntry>()).optional(),
 });

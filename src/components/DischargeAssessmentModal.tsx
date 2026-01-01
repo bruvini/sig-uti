@@ -64,6 +64,11 @@ const DischargeAssessmentModal = () => {
 
     const watchUnitId = form.watch("unitId");
 
+    // Bugfix 1: Reset Bed Select when Unit Changes
+    useEffect(() => {
+        form.setValue("bedId", "");
+    }, [watchUnitId, form]);
+
     // Filter beds by unit and only show occupied beds?
     // Usually we assess patients IN beds (Occupied).
     const filteredBeds = allBeds.filter(b => b.unitId === watchUnitId && b.status === 'occupied');
@@ -83,8 +88,6 @@ const DischargeAssessmentModal = () => {
                 description: "Paciente não elegível para alta segundo protocolo CFM. Avaliação registrada apenas como histórico.",
                 variant: "destructive"
             });
-            // We could still save it as 'not_candidate' status, but prompt says "Salve apenas como registro histórico... mas não adicione à lista ativa".
-            // I'll save it as 'not_candidate'.
         }
 
         try {
@@ -120,6 +123,34 @@ const DischargeAssessmentModal = () => {
             toast({ title: "Erro ao salvar avaliação", variant: "destructive" });
         }
     };
+
+    const criteriaList = [
+        {
+            id: "hemodynamicStability",
+            label: "Estabilidade Hemodinâmica?",
+            description: "Paciente sem necessidade de vasopressores ou em doses mínimas/estáveis, com pressão arterial e perfusão tecidual adequadas."
+        },
+        {
+            id: "respiratoryStability",
+            label: "Estabilidade Respiratória?",
+            description: "Paciente extubado, com via aérea segura, saturação adequada (com ou sem O2 suplementar) e sem esforço respiratório agudo."
+        },
+        {
+            id: "causeControlled",
+            label: "Controle da Causa Base?",
+            description: "O fator precipitante que motivou a admissão na UTI (ex: choque, pós-op, insuficiência aguda) foi controlado ou revertido."
+        },
+        {
+            id: "neurologicalStability",
+            label: "Estabilidade Neurológica?",
+            description: "Nível de consciência preservado (Glasgow > 13) ou retorno ao padrão basal conhecido do paciente, sem hipertensão intracraniana."
+        },
+        {
+            id: "noOrganDysfunction",
+            label: "Ausência de Disfunção Orgânica Aguda Grave?",
+            description: "Ausência de novas disfunções graves (renal, metabólica, coagulopatia) que exijam intervenção exclusiva de UTI."
+        }
+    ];
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -162,14 +193,22 @@ const DischargeAssessmentModal = () => {
                         </div>
                         <div className="space-y-2">
                             <Label>Leito</Label>
-                            <Select onValueChange={(val) => form.setValue("bedId", val)} disabled={!watchUnitId}>
+                            <Select
+                                onValueChange={(val) => form.setValue("bedId", val)}
+                                disabled={!watchUnitId}
+                                value={form.watch("bedId")} // Controlled value needed for reset
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione o Leito" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {filteredBeds.map(b => (
-                                        <SelectItem key={b.id} value={b.id}>Leito {b.bedNumber}</SelectItem>
-                                    ))}
+                                    {filteredBeds.length === 0 ? (
+                                        <SelectItem value="none" disabled>Sem leitos ocupados</SelectItem>
+                                    ) : (
+                                        filteredBeds.map(b => (
+                                            <SelectItem key={b.id} value={b.id}>Leito {b.bedNumber}</SelectItem>
+                                        ))
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -179,18 +218,15 @@ const DischargeAssessmentModal = () => {
                     <div className="space-y-4">
                         <h4 className="font-semibold text-sm text-gray-700">Checklist de Estabilidade</h4>
 
-                        {[
-                            { id: "hemodynamicStability", label: "Estabilidade Hemodinâmica?" },
-                            { id: "respiratoryStability", label: "Estabilidade Respiratória?" },
-                            { id: "causeControlled", label: "Controle da Causa Base?" },
-                            { id: "neurologicalStability", label: "Estabilidade Neurológica?" },
-                            { id: "noOrganDysfunction", label: "Ausência de Disfunção Orgânica Aguda Grave?" }
-                        ].map((criterion) => (
-                            <div key={criterion.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <Label className="text-sm font-medium">{criterion.label}</Label>
+                        {criteriaList.map((criterion) => (
+                            <div key={criterion.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
+                                <div className="flex flex-col gap-1 max-w-[70%]">
+                                    <Label className="text-sm font-medium">{criterion.label}</Label>
+                                    <span className="text-xs text-muted-foreground italic">{criterion.description}</span>
+                                </div>
                                 <RadioGroup
                                     onValueChange={(val) => form.setValue(criterion.id as any, val)}
-                                    className="flex gap-4"
+                                    className="flex gap-4 mt-1"
                                 >
                                     <div className="flex items-center space-x-2">
                                         <RadioGroupItem value="yes" id={`${criterion.id}-yes`} />

@@ -36,7 +36,8 @@ import {
     MoreVertical,
     UserPlus,
     RefreshCw,
-    XCircle
+    XCircle,
+    Info
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -89,6 +90,10 @@ const BedAvailability = () => {
     const availableBeds = beds.filter(b =>
         ['clean', 'discharge_confirmed', 'discharge_unconfirmed'].includes(b.status)
     );
+
+    // Summary Stats
+    const maintenanceCount = beds.filter(b => b.status === 'maintenance').length;
+    const closedCount = beds.filter(b => b.status === 'closed').length;
 
     const handleRegularPatient = (bed: Bed & { id: string }) => {
         setSelectedBed(bed);
@@ -266,6 +271,19 @@ const BedAvailability = () => {
                         </div>
                     </ScrollArea>
                 )}
+
+                {/* FOOTER: STATUS SUMMARY */}
+                <div className="bg-gray-50 border-t p-2 px-4 flex items-center justify-between text-[10px] text-gray-500">
+                    <div className="flex items-center gap-2">
+                        <Info className="h-3 w-3" />
+                        <span>Resumo Indisponíveis:</span>
+                    </div>
+                    <div className="flex gap-3 font-medium">
+                        <span>{maintenanceCount} em Mecânica</span>
+                        <span>•</span>
+                        <span>{closedCount} Bloqueados</span>
+                    </div>
+                </div>
             </div>
 
             {/* REGULATION DIALOG */}

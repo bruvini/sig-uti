@@ -98,7 +98,16 @@ const InformAvailabilityModal = () => {
             case 'clean': return "Limpo / Pronto";
             case 'discharge_confirmed': return "Alta Confirmada";
             case 'discharge_unconfirmed': return "Previsão de Alta";
-            case 'maintenance': return "Em Manutenção";
+            case 'maintenance': return "Em Mecânica";
+            default: return s;
+        }
+    }
+
+    const getBedStatusLabel = (s: string) => {
+        switch(s) {
+            case 'maintenance': return "Em Mecânica";
+            case 'closed': return "Fechado/Bloqueado";
+            case 'occupied': return "Ocupado";
             default: return s;
         }
     }
@@ -146,7 +155,7 @@ const InformAvailabilityModal = () => {
                                 ) : (
                                     availableBedsForSelection.map(b => (
                                         <SelectItem key={b.id} value={b.id}>
-                                            Leito {b.bedNumber} ({b.status})
+                                            Leito {b.bedNumber} ({getBedStatusLabel(b.status)})
                                         </SelectItem>
                                     ))
                                 )}

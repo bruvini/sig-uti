@@ -116,39 +116,51 @@ export const assignPatientToBed = async (
     bedStatus: BedStatus,
     justification?: string
 ) => {
-    const batch = writeBatch(db);
+    try {
+        const batch = writeBatch(db);
 
-    const requestRef = doc(db, REQUESTS_COLLECTION, requestId);
+        const requestRef = doc(db, REQUESTS_COLLECTION, requestId);
 
-    const auditEntry: AuditEntry = {
-        action: 'regulated',
-        timestamp: Timestamp.now(),
-        userParams: 'Médico Regulador',
-        reason: justification || 'Regulação padrão',
-        details: {
-            bedId,
-            bedStatusAtTime: bedStatus,
-            justification
-        }
-    };
+        // Sanitize Payload (Undefined Check)
+        const safeJustification = justification || 'Regulação padrão';
 
-    batch.update(requestRef, {
-        status: 'regulated',
-        assignedBedId: bedId,
-        assignedUnitId: unitId,
-        regulationJustification: justification || null,
-        regulationBedStatusSnapshot: bedStatus,
-        auditHistory: arrayUnion(auditEntry)
-    });
+        // Audit Entry
+        const auditEntry = {
+            action: 'regulated',
+            timestamp: Timestamp.now(),
+            userParams: 'Médico Regulador',
+            reason: safeJustification,
+            details: {
+                bedId: bedId || null,
+                bedStatusAtTime: bedStatus || null,
+                justification: safeJustification
+            }
+        };
 
-    const bedRef = doc(db, BEDS_COLLECTION, bedId);
-    batch.update(bedRef, {
-        status: 'occupied',
-        currentPatientId: requestId,
-        updatedAt: serverTimestamp()
-    });
+        // There is no guard clause here checking bed.status, which is correct as per new requirement.
+        // We allow regulation to maintenance/dirty beds.
 
-    await batch.commit();
+        batch.update(requestRef, {
+            status: 'regulated',
+            assignedBedId: bedId,
+            assignedUnitId: unitId,
+            regulationJustification: safeJustification,
+            regulationBedStatusSnapshot: bedStatus || null,
+            auditHistory: arrayUnion(auditEntry)
+        });
+
+        const bedRef = doc(db, BEDS_COLLECTION, bedId);
+        batch.update(bedRef, {
+            status: 'occupied',
+            currentPatientId: requestId,
+            updatedAt: serverTimestamp()
+        });
+
+        await batch.commit();
+    } catch (error: any) {
+        console.error("Transaction Error:", error.code, error.message);
+        throw error; // Re-throw to be caught by UI
+    }
 };
 
 export const confirmAdmission = async (requestId: string) => {
@@ -178,7 +190,7 @@ export const cancelRegulation = async (requestId: string, bedId: string, reason:
             action: 'regulation_cancelled',
             timestamp: Timestamp.now(),
             userParams: 'Médico Regulador',
-            reason: reason
+            reason: reason || "Cancelamento"
         })
     });
 

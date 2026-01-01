@@ -4,7 +4,7 @@ import {
     subscribeToDischargeStats,
     confirmDischarge
 } from "@/services/dischargeService";
-import { DischargeAssessment } from "@/types/discharge";
+import { DischargeAssessment, ReviewHistoryEntry } from "@/types/discharge";
 import DischargeAssessmentModal from "./DischargeAssessmentModal";
 import DischargeReviewModal from "./DischargeReviewModal";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,14 @@ import {
     DoorOpen,
     FileSignature,
     Timer,
-    ArrowRight
+    ArrowRight,
+    History
 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { differenceInDays, parseISO } from "date-fns";
 
 const DischargeManagement = () => {
@@ -57,6 +63,14 @@ const DischargeManagement = () => {
             return days;
         } catch {
             return 0;
+        }
+    };
+
+    const getDecisionBadge = (decision: string) => {
+        switch(decision) {
+            case 'administrative_barrier': return <Badge className="bg-amber-100 text-amber-800 border-0">Validar Alta (Barreira)</Badge>;
+            case 'clinical_mismatch': return <Badge className="bg-red-100 text-red-800 border-0">Contraindicar</Badge>;
+            default: return <Badge variant="outline">Manter Análise</Badge>;
         }
     };
 
@@ -126,11 +140,41 @@ const DischargeManagement = () => {
                                             </div>
                                         )}
 
-                                        <div>
-                                            <h4 className="font-bold text-sm text-gray-900">{d.patientName}</h4>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant="secondary" className="text-[10px]">{d.unitName} • Leito {d.bedNumber}</Badge>
+                                        <div className="flex justify-between items-start pr-12">
+                                            <div>
+                                                <h4 className="font-bold text-sm text-gray-900">{d.patientName}</h4>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <Badge variant="secondary" className="text-[10px]">{d.unitName} • Leito {d.bedNumber}</Badge>
+                                                </div>
                                             </div>
+
+                                            {/* History Popover */}
+                                            {d.reviewHistory && d.reviewHistory.length > 0 && (
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-blue-600">
+                                                            <History className="h-4 w-4" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-0" align="end">
+                                                        <div className="p-2 border-b bg-gray-50 text-xs font-semibold">Histórico de Revisões</div>
+                                                        <ScrollArea className="h-[200px]">
+                                                            <div className="flex flex-col gap-2 p-2">
+                                                                {[...d.reviewHistory].reverse().map((entry, idx) => (
+                                                                    <div key={idx} className="text-xs border-b last:border-0 pb-2">
+                                                                        <div className="flex justify-between text-gray-400 mb-1">
+                                                                            <span>{new Date(entry.timestamp.seconds * 1000).toLocaleString()}</span>
+                                                                            <span>{entry.userParams}</span>
+                                                                        </div>
+                                                                        <div className="mb-1">{getDecisionBadge(entry.decision)}</div>
+                                                                        <p className="text-gray-700 italic">"{entry.observation}"</p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </ScrollArea>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            )}
                                         </div>
 
                                         <div className={`flex items-center gap-2 text-xs font-medium ${days > 7 ? 'text-red-600' : 'text-gray-500'}`}>

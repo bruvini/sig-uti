@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { addDischargeAssessment } from "@/services/dischargeService";
 import { subscribeToUnits, subscribeToBeds } from "@/services/bedService";
-import { Unit, Bed } from "@/types/bed";
+import { Unit, Bed, BedStatus } from "@/types/bed";
 import { useToast } from "@/components/ui/use-toast";
 
 import {
@@ -69,9 +69,21 @@ const DischargeAssessmentModal = () => {
         form.setValue("bedId", "");
     }, [watchUnitId, form]);
 
-    // Filter beds by unit and only show occupied beds?
-    // Usually we assess patients IN beds (Occupied).
-    const filteredBeds = allBeds.filter(b => b.unitId === watchUnitId && b.status === 'occupied');
+    // FILTER LOGIC CHANGE: Removed status filter to allow any bed selection
+    const filteredBeds = allBeds.filter(b => b.unitId === watchUnitId);
+
+    // HELPER: Translate Status
+    const getBedStatusLabel = (status: BedStatus) => {
+        switch(status) {
+            case 'clean': return "Limpo";
+            case 'occupied': return "Ocupado";
+            case 'maintenance': return "Em Mecânica";
+            case 'closed': return "Fechado";
+            case 'discharge_confirmed': return "Alta Confirmada";
+            case 'discharge_unconfirmed': return "Alta Prevista";
+            default: return status;
+        }
+    };
 
     const onSubmit = async (data: z.infer<typeof AssessmentFormSchema>) => {
         // Validation Logic
@@ -203,10 +215,12 @@ const DischargeAssessmentModal = () => {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {filteredBeds.length === 0 ? (
-                                        <SelectItem value="none" disabled>Sem leitos ocupados</SelectItem>
+                                        <SelectItem value="none" disabled>Sem leitos cadastrados</SelectItem>
                                     ) : (
                                         filteredBeds.map(b => (
-                                            <SelectItem key={b.id} value={b.id}>Leito {b.bedNumber}</SelectItem>
+                                            <SelectItem key={b.id} value={b.id}>
+                                                Leito {b.bedNumber} ({getBedStatusLabel(b.status)})
+                                            </SelectItem>
                                         ))
                                     )}
                                 </SelectContent>

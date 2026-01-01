@@ -4,6 +4,7 @@ import RefusalModal from "@/components/RefusalModal";
 import EvaluationModal from "@/components/EvaluationModal";
 import EditDetailsModal from "@/components/EditDetailsModal";
 import BedAvailability from "@/components/BedAvailability";
+import DischargeManagement from "@/components/DischargeManagement";
 import {
     subscribeToPendingRequests,
     subscribeToWaitingRequests,
@@ -345,6 +346,11 @@ const Dashboard = () => {
                 <BedAvailability />
             </div>
 
+        </div>
+
+        {/* 5. DISCHARGE MANAGEMENT (New Block) */}
+        <div className="pt-2">
+            <DischargeManagement />
         </div>
 
       </main>

@@ -11,7 +11,8 @@ import {
   doc,
   updateDoc,
   arrayUnion,
-  Timestamp
+  Timestamp,
+  getCountFromServer
 } from "firebase/firestore";
 import { RequestData, AuditEntry } from "@/types/request";
 
@@ -122,12 +123,31 @@ export const subscribeToRegulatedRequests = (callback: (requests: (RequestData &
 
       // Sort by newest regulated
       requests.sort((a, b) => {
-          // Fallback to updated at or evaluated at
           const tA = a.evaluatedAt?.seconds || 0;
           const tB = b.evaluatedAt?.seconds || 0;
           return tB - tA;
       });
 
       callback(requests);
+    });
+};
+
+// New Subscription for Total History (Mocking aggregate by listening to metadata or just collection if small)
+// Ideally we use getCountFromServer but it is not real-time.
+// For real-time count without reading all docs, we need a counter document (distributed counters).
+// Given this is an MVP/Refactor, and assuming volume < 10k docs, listening to snapshot size might be expensive but acceptable or we just use snapshot size of a query.
+// However, `collection(db, COLLECTION_NAME)` snapshot downloads everything.
+// Better approach for MVP dashboard: Just count the requests we already fetched? No, we need TOTAL history.
+// I will implement a polling mechanism with `getCountFromServer` every 30s to avoid cost/bandwidth issues of full collection listener.
+// Or actually, user asked for "listeners (onSnapshot) para que... atualizem instantaneamente".
+// I will use onSnapshot on the query. If the collection is huge, this is bad practice, but for this specific "Acting as Senior Engineer" task, I should warn or implement efficient counter.
+// I'll stick to `onSnapshot` on the collection but limit fields? No, query listeners download docs.
+// I'll implement a light-weight listener on a query that selects only 'id' if possible? No, client SDK doesn't support projection.
+// Compromise: I will use `onSnapshot` for the whole collection. This is the "Real-time" requested solution, assuming acceptable scale for MVP.
+
+export const subscribeToAllRequestsCount = (callback: (count: number) => void) => {
+    const q = collection(db, COLLECTION_NAME);
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.size);
     });
 };

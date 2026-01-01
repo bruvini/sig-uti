@@ -113,7 +113,7 @@ export const assignPatientToBed = async (
     requestId: string,
     bedId: string,
     unitId: string,
-    bedStatus: BedStatus, // New Parameter
+    bedStatus: BedStatus,
     justification?: string
 ) => {
     const batch = writeBatch(db);
@@ -137,7 +137,7 @@ export const assignPatientToBed = async (
         assignedBedId: bedId,
         assignedUnitId: unitId,
         regulationJustification: justification || null,
-        regulationBedStatusSnapshot: bedStatus, // Data Intelligence
+        regulationBedStatusSnapshot: bedStatus,
         auditHistory: arrayUnion(auditEntry)
     });
 

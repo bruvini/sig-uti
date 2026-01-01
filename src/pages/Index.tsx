@@ -4,15 +4,21 @@ import RefusalModal from "@/components/RefusalModal";
 import EvaluationModal from "@/components/EvaluationModal";
 import EditDetailsModal from "@/components/EditDetailsModal";
 import BedAvailability from "@/components/BedAvailability";
-import { subscribeToPendingRequests, subscribeToWaitingRequests, subscribeToRegulatedRequests } from "@/services/requestService";
-import { confirmAdmission, cancelRegulation } from "@/services/bedService";
+import {
+    subscribeToPendingRequests,
+    subscribeToWaitingRequests,
+    subscribeToRegulatedRequests,
+    subscribeToAllRequestsCount
+} from "@/services/requestService";
+import { confirmAdmission, cancelRegulation, subscribeToBeds } from "@/services/bedService";
 
 import { RequestData } from "@/types/request";
+import { Bed } from "@/types/bed";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Textarea } from "@/components/ui/textarea"; // New import
+import { Textarea } from "@/components/ui/textarea";
 import {
     Activity,
     Clock,
@@ -28,7 +34,9 @@ import {
     LogOut,
     Ambulance,
     MapPin,
-    AlertTriangle
+    AlertTriangle,
+    Siren,
+    History
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -44,6 +52,8 @@ const Dashboard = () => {
   const [pendingRequests, setPendingRequests] = useState<(RequestData & { id: string })[]>([]);
   const [waitingRequests, setWaitingRequests] = useState<(RequestData & { id: string })[]>([]);
   const [regulatedRequests, setRegulatedRequests] = useState<(RequestData & { id: string })[]>([]);
+  const [totalHistoryCount, setTotalHistoryCount] = useState<number>(0);
+  const [allBeds, setAllBeds] = useState<Bed[]>([]);
 
   // Modal States
   const [refusalModalOpen, setRefusalModalOpen] = useState(false);
@@ -62,10 +72,15 @@ const Dashboard = () => {
     const unsubPending = subscribeToPendingRequests(setPendingRequests);
     const unsubWaiting = subscribeToWaitingRequests(setWaitingRequests);
     const unsubRegulated = subscribeToRegulatedRequests(setRegulatedRequests);
+    const unsubCount = subscribeToAllRequestsCount(setTotalHistoryCount);
+    const unsubBeds = subscribeToBeds((beds) => setAllBeds(beds));
+
     return () => {
         unsubPending();
         unsubWaiting();
         unsubRegulated();
+        unsubCount();
+        unsubBeds();
     };
   }, []);
 
@@ -136,8 +151,16 @@ const Dashboard = () => {
     }
   };
 
+  // Queue Segmentation
+  const emergencyQueue = waitingRequests.filter(r => r.requestType === 'emergency');
+  const inpatientQueue = waitingRequests.filter(r => r.requestType === 'inpatient');
   const surgicalQueue = waitingRequests.filter(r => r.requestType === 'surgical');
-  const inpatientQueue = waitingRequests.filter(r => r.requestType === 'inpatient' || r.requestType === 'emergency');
+
+  // KPI Calculations
+  const totalBeds = allBeds.length;
+  const availableBedsCount = allBeds.filter(b =>
+      ['clean', 'discharge_confirmed', 'discharge_unconfirmed', 'maintenance'].includes(b.status)
+  ).length;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans overflow-hidden h-screen">
@@ -154,9 +177,9 @@ const Dashboard = () => {
 
       <main className="flex-1 p-4 space-y-4 max-w-[1920px] mx-auto w-full overflow-y-auto">
 
-        {/* TOP SECTION (Reduced Height) */}
+        {/* TOP SECTION (KPIs) */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* KPI 1 */}
+            {/* KPI 1: Pendências */}
             <Card className="bg-white shadow-sm border-gray-100">
                 <CardContent className="p-3 flex items-center justify-between">
                     <div>
@@ -166,17 +189,20 @@ const Dashboard = () => {
                     <Clock className="h-4 w-4 text-yellow-200" />
                 </CardContent>
             </Card>
-             {/* KPI 2 */}
+             {/* KPI 2: Capacidade Operacional */}
              <Card className="bg-white shadow-sm border-gray-100">
                 <CardContent className="p-3 flex items-center justify-between">
                     <div>
-                        <p className="text-xs text-gray-500">Fila Espera</p>
-                        <p className="text-xl font-bold text-blue-600">{waitingRequests.length}</p>
+                        <p className="text-xs text-gray-500">Capacidade Operacional</p>
+                        <div className="flex items-baseline gap-1">
+                            <p className="text-xl font-bold text-blue-600">{availableBedsCount}</p>
+                            <span className="text-sm text-gray-400">/ {totalBeds}</span>
+                        </div>
                     </div>
-                    <ListOrdered className="h-4 w-4 text-blue-200" />
+                    <BedDouble className="h-4 w-4 text-blue-200" />
                 </CardContent>
             </Card>
-             {/* KPI 3 */}
+             {/* KPI 3: Em Trânsito */}
              <Card className="bg-white shadow-sm border-gray-100">
                 <CardContent className="p-3 flex items-center justify-between">
                     <div>
@@ -186,14 +212,14 @@ const Dashboard = () => {
                     <Ambulance className="h-4 w-4 text-orange-200" />
                 </CardContent>
             </Card>
-             {/* KPI 4 */}
+             {/* KPI 4: Total Histórico */}
              <Card className="bg-white shadow-sm border-gray-100">
                 <CardContent className="p-3 flex items-center justify-between">
                     <div>
-                        <p className="text-xs text-gray-500">Altas 24h</p>
-                        <p className="text-xl font-bold text-green-600">--</p>
+                        <p className="text-xs text-gray-500">Total Histórico</p>
+                        <p className="text-xl font-bold text-gray-700">{totalHistoryCount}</p>
                     </div>
-                    <LogOut className="h-4 w-4 text-green-200" />
+                    <History className="h-4 w-4 text-gray-200" />
                 </CardContent>
             </Card>
         </div>
@@ -255,80 +281,59 @@ const Dashboard = () => {
             {/* LEFT: PATIENT QUEUE (7/12) */}
             <div className="lg:col-span-7 flex flex-col gap-4 h-full overflow-hidden">
 
-                {/* QUEUE 1: INPATIENT */}
-                <div className="flex-1 bg-white rounded-lg border shadow-sm flex flex-col overflow-hidden">
-                    <div className="p-3 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                {/* QUEUE 1: EMERGENCY (Red Room) */}
+                <div className="flex-[2] bg-white rounded-lg border-l-4 border-l-red-500 border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+                    <div className="p-2 border-b bg-red-50 flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-2">
-                            <div className="h-4 w-1 bg-blue-500 rounded-full" />
+                            <Siren className="h-4 w-4 text-red-600 animate-pulse" />
+                            <h3 className="font-bold text-sm text-red-700">Emergência / Sala Vermelha</h3>
+                        </div>
+                        <Badge variant="secondary" className="text-[10px] bg-red-100 text-red-800">{emergencyQueue.length}</Badge>
+                    </div>
+                    <ScrollArea className="flex-1">
+                        <div className="p-2 space-y-2">
+                            {emergencyQueue.map((req) => (
+                                <QueueItem key={req.id} req={req} handleEdit={handleEdit} handleReview={handleReview} />
+                            ))}
+                            {emergencyQueue.length === 0 && <div className="text-center text-xs text-gray-400 py-4">Nenhum paciente crítico.</div>}
+                        </div>
+                    </ScrollArea>
+                </div>
+
+                {/* QUEUE 2: INPATIENT (Ward) */}
+                <div className="flex-[3] bg-white rounded-lg border shadow-sm flex flex-col overflow-hidden">
+                    <div className="p-2 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                        <div className="flex items-center gap-2">
+                            <div className="h-3 w-3 bg-blue-500 rounded-full" />
                             <h3 className="font-semibold text-sm">Internados / Enfermarias</h3>
                         </div>
                         <Badge variant="outline" className="text-[10px]">{inpatientQueue.length}</Badge>
                     </div>
                     <ScrollArea className="flex-1">
-                        <div className="p-3 space-y-2">
+                        <div className="p-2 space-y-2">
                             {inpatientQueue.map((req) => (
-                                <div key={req.id} className="flex items-center justify-between p-2 bg-white border rounded hover:border-blue-300 transition-colors">
-                                    <div className="flex items-center gap-3 overflow-hidden">
-                                        <Badge className={`${getPriorityBadgeColor(req.cfmPriority)} text-white border-0 h-7 w-7 rounded-full flex items-center justify-center p-0 text-xs shrink-0`}>
-                                            P{req.cfmPriority}
-                                        </Badge>
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <p className="font-semibold text-sm truncate">{req.patientName}</p>
-                                                {req.sisregId && <Badge variant="secondary" className="text-[10px] h-4 px-1">SISREG {req.sisregId}</Badge>}
-                                            </div>
-                                            {/* LOCATION PIN */}
-                                            {(req.requestType === 'inpatient' || req.requestType === 'emergency') && (req.sector || req.bed) && (
-                                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                                                    <MapPin className="h-3 w-3" />
-                                                    <span className="truncate">Setor: {req.sector} • Leito: {req.bed}</span>
-                                                </div>
-                                            )}
-                                            <p className="text-[10px] text-gray-400 mt-0.5 truncate">{req.clinicalReason}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]" onClick={() => handleEdit(req)}>
-                                            <Edit2 className="h-3 w-3 mr-1" /> Editar
-                                        </Button>
-                                        <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px] text-blue-600 font-medium" onClick={() => handleReview(req)}>Revisar</Button>
-                                    </div>
-                                </div>
+                                <QueueItem key={req.id} req={req} handleEdit={handleEdit} handleReview={handleReview} />
                             ))}
+                            {inpatientQueue.length === 0 && <div className="text-center text-xs text-gray-400 py-4">Fila vazia.</div>}
                         </div>
                     </ScrollArea>
                 </div>
 
-                {/* QUEUE 2: SURGICAL */}
-                <div className="flex-1 bg-white rounded-lg border shadow-sm flex flex-col overflow-hidden">
-                    <div className="p-3 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                {/* QUEUE 3: SURGICAL (Elective) */}
+                <div className="flex-[2] bg-white rounded-lg border shadow-sm flex flex-col overflow-hidden">
+                    <div className="p-2 border-b bg-gray-50 flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-2">
-                            <div className="h-4 w-1 bg-green-500 rounded-full" />
+                            <div className="h-3 w-3 bg-green-500 rounded-full" />
                             <h3 className="font-semibold text-sm">Cirúrgicos / Eletivos</h3>
                         </div>
                         <Badge variant="outline" className="text-[10px]">{surgicalQueue.length}</Badge>
                     </div>
                     <ScrollArea className="flex-1">
-                        <div className="p-3 space-y-2">
+                        <div className="p-2 space-y-2">
                             {surgicalQueue.map((req) => (
-                                <div key={req.id} className="flex items-center justify-between p-2 bg-white border rounded hover:border-green-300 transition-colors">
-                                    <div className="flex items-center gap-3 overflow-hidden">
-                                        <Badge className={`${getPriorityBadgeColor(req.cfmPriority)} text-white border-0 h-7 w-7 rounded-full flex items-center justify-center p-0 text-xs shrink-0`}>
-                                            P{req.cfmPriority}
-                                        </Badge>
-                                        <div className="min-w-0">
-                                            <p className="font-semibold text-sm truncate">{req.patientName}</p>
-                                            <p className="text-xs text-gray-500 truncate">{req.surgeryType}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]" onClick={() => handleEdit(req)}>
-                                            <Edit2 className="h-3 w-3 mr-1" /> Editar
-                                        </Button>
-                                        <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px] text-blue-600 font-medium" onClick={() => handleReview(req)}>Revisar</Button>
-                                    </div>
-                                </div>
+                                <QueueItem key={req.id} req={req} handleEdit={handleEdit} handleReview={handleReview} />
                             ))}
+                            {surgicalQueue.length === 0 && <div className="text-center text-xs text-gray-400 py-4">Fila vazia.</div>}
                         </div>
                     </ScrollArea>
                 </div>
@@ -395,5 +400,50 @@ const Dashboard = () => {
     </div>
   );
 };
+
+// Reusable Queue Item Component
+const QueueItem = ({ req, handleEdit, handleReview }: { req: RequestData & { id: string }, handleEdit: any, handleReview: any }) => {
+
+    const getPriorityBadgeColor = (p?: number) => {
+        switch(p) {
+            case 1: return "bg-red-500";
+            case 2: return "bg-orange-500";
+            case 3: return "bg-yellow-500";
+            case 4: return "bg-blue-500";
+            case 5: return "bg-gray-500";
+            default: return "bg-gray-400";
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-between p-2 bg-white border rounded hover:bg-slate-50 transition-colors">
+            <div className="flex items-center gap-3 overflow-hidden">
+                <Badge className={`${getPriorityBadgeColor(req.cfmPriority)} text-white border-0 h-6 w-6 rounded-full flex items-center justify-center p-0 text-[10px] shrink-0`}>
+                    {req.cfmPriority || "?"}
+                </Badge>
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm truncate">{req.patientName}</p>
+                        {req.sisregId && <Badge variant="secondary" className="text-[9px] h-3.5 px-1">SISREG {req.sisregId}</Badge>}
+                    </div>
+                    {/* LOCATION PIN */}
+                    {(req.sector || req.bed) && (
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+                            <MapPin className="h-3 w-3" />
+                            <span className="truncate">Setor: {req.sector} • Leito: {req.bed}</span>
+                        </div>
+                    )}
+                    <p className="text-[10px] text-gray-400 mt-0.5 truncate">{req.clinicalReason || req.surgeryType}</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => handleEdit(req)}>
+                    <Edit2 className="h-3 w-3" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-blue-600 font-medium" onClick={() => handleReview(req)}>Revisar</Button>
+            </div>
+        </div>
+    );
+}
 
 export default Dashboard;
